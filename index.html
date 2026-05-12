@@ -110,6 +110,18 @@ function fmtK(v) {
   return Math.round(v).toString();
 }
 
+function normalizeDate(str) {
+  if (!str) return null;
+  str = str.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  const d = new Date(str);
+  if (isNaN(d)) return null;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day;
+}
+
 function parseCSV(market) {
   return new Promise((resolve, reject) => {
     Papa.parse(PROXY + '?market=' + market, {
@@ -129,8 +141,9 @@ async function loadAll() {
         const rows = await parseCSV(market);
         const byDate = {};
         rows.forEach(r => {
-          if (!r.date) return;
-          byDate[r.date] = {
+          const date = normalizeDate(r.date);
+          if (!date) return;
+          byDate[date] = {
             rev2025: parseFloat(r.revenue_2025) || 0,
             rev2026: parseFloat(r.revenue_2026) || 0
           };
@@ -148,8 +161,8 @@ async function loadAll() {
 
 function getMonthData(market) {
   const data = allData[market] || {};
-  const prefix2025 = `2025-${String(currentMonth+1).padStart(2,'0')}`;
-  const prefix2026 = `2026-${String(currentMonth+1).padStart(2,'0')}`;
+  const prefix2025 = '2025-' + String(currentMonth + 1).padStart(2, '0');
+  const prefix2026 = '2026-' + String(currentMonth + 1).padStart(2, '0');
 
   let total2025 = 0;
   let daily2026 = {};
@@ -157,7 +170,7 @@ function getMonthData(market) {
   Object.entries(data).forEach(([date, v]) => {
     if (date.startsWith(prefix2025)) total2025 += v.rev2025;
     if (date.startsWith(prefix2026)) {
-      const day = parseInt(date.slice(8,10));
+      const day = parseInt(date.slice(8, 10));
       daily2026[day] = (daily2026[day] || 0) + v.rev2026;
     }
   });
@@ -203,7 +216,7 @@ function renderMarket(market) {
   const forecastEnd = forecastArr[daysInMonth - 1] || mtd;
   const yesterday2026 = daily2026[dayOfMonth - 1] || 0;
   const data = allData[market] || {};
-  const key2025 = `2025-${String(currentMonth+1).padStart(2,'0')}-${String(dayOfMonth-1).padStart(2,'0')}`;
+  const key2025 = '2025-' + String(currentMonth + 1).padStart(2, '0') + '-' + String(dayOfMonth - 1).padStart(2, '0');
   const yesterday2025 = (data[key2025] || {}).rev2025 || 0;
 
   document.getElementById('dash-title').textContent = monthNames[currentMonth] + ' ' + currentYear + (market !== 'TOTAL' ? ' · ' + market : ' · Alla marknader');
@@ -232,8 +245,8 @@ function renderMarket(market) {
       labels,
       datasets: [
         { label: 'Faktisk 2026', data: actualArr, borderColor: '#378ADD', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 2, tension: 0.3, spanGaps: false },
-        { label: 'Mål', data: goalArr, borderColor: '#1D9E75', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [4,4], pointRadius: 0 },
-        { label: 'Prognos', data: forecastArr, borderColor: '#378ADD', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [3,3], pointRadius: 0, tension: 0.3, spanGaps: false }
+        { label: 'Mål', data: goalArr, borderColor: '#1D9E75', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0 },
+        { label: 'Prognos', data: forecastArr, borderColor: '#378ADD', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [3, 3], pointRadius: 0, tension: 0.3, spanGaps: false }
       ]
     },
     options: {
