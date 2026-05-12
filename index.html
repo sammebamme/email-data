@@ -94,11 +94,13 @@
 </div>
 
 <script>
+const PROXY = 'https://corsproxy.io/?';
+
 const URLS = {
-  SE: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSs8qyfSCMz7DuNcz5HVdvTIsPkHzPtekmOspccsqvPsRXV27ewmJqMhTRCPn82JKWJBHEJSlnpzcVw/pub?gid=849472739&single=true&output=csv',
-  NO: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSs8qyfSCMz7DuNcz5HVdvTIsPkHzPtekmOspccsqvPsRXV27ewmJqMhTRCPn82JKWJBHEJSlnpzcVw/pub?gid=543100583&single=true&output=csv',
-  FI: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSs8qyfSCMz7DuNcz5HVdvTIsPkHzPtekmOspccsqvPsRXV27ewmJqMhTRCPn82JKWJBHEJSlnpzcVw/pub?gid=2088645591&single=true&output=csv',
-  TOTAL: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSs8qyfSCMz7DuNcz5HVdvTIsPkHzPtekmOspccsqvPsRXV27ewmJqMhTRCPn82JKWJBHEJSlnpzcVw/pub?gid=1668560803&single=true&output=csv'
+  SE: PROXY + encodeURIComponent('https://docs.google.com/spreadsheets/d/e/2PACX-1vSs8qyfSCMz7DuNcz5HVdvTIsPkHzPtekmOspccsqvPsRXV27ewmJqMhTRCPn82JKWJBHEJSlnpzcVw/pub?gid=849472739&single=true&output=csv'),
+  NO: PROXY + encodeURIComponent('https://docs.google.com/spreadsheets/d/e/2PACX-1vSs8qyfSCMz7DuNcz5HVdvTIsPkHzPtekmOspccsqvPsRXV27ewmJqMhTRCPn82JKWJBHEJSlnpzcVw/pub?gid=543100583&single=true&output=csv'),
+  FI: PROXY + encodeURIComponent('https://docs.google.com/spreadsheets/d/e/2PACX-1vSs8qyfSCMz7DuNcz5HVdvTIsPkHzPtekmOspccsqvPsRXV27ewmJqMhTRCPn82JKWJBHEJSlnpzcVw/pub?gid=2088645591&single=true&output=csv'),
+  TOTAL: PROXY + encodeURIComponent('https://docs.google.com/spreadsheets/d/e/2PACX-1vSs8qyfSCMz7DuNcz5HVdvTIsPkHzPtekmOspccsqvPsRXV27ewmJqMhTRCPn82JKWJBHEJSlnpzcVw/pub?gid=1668560803&single=true&output=csv')
 };
 
 const allData = {};
