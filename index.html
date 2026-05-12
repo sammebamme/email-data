@@ -1,126 +1,274 @@
-const PROPERTIES = {
-  SE: 'properties/448637084',
-  NO: 'properties/446874563',
-  FI: 'properties/442159209'
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email Revenue Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f3; color: #1a1a1a; min-height: 100vh; padding: 2rem; }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { font-size: 22px; font-weight: 500; margin-bottom: 4px; }
+    .subtitle { font-size: 13px; color: #888; margin-bottom: 1.5rem; }
+    .top-bar { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 1.5rem; }
+    .market-btns { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .mkt-btn { font-size: 13px; padding: 6px 14px; border-radius: 8px; border: 0.5px solid #ccc; background: transparent; color: #666; cursor: pointer; transition: all 0.15s; }
+    .mkt-btn:hover { background: #ebebeb; }
+    .mkt-btn.active { background: #fff; color: #1a1a1a; font-weight: 500; border-color: #aaa; }
+    .badge { display: inline-block; font-size: 12px; padding: 4px 10px; border-radius: 8px; font-weight: 500; }
+    .badge-success { background: #eaf3de; color: #3b6d11; }
+    .badge-danger { background: #fcebeb; color: #a32d2d; }
+    .badge-warning { background: #faeeda; color: #854f0b; }
+    .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 1.5rem; }
+    .metric-card { background: #fff; border-radius: 10px; padding: 1rem 1.25rem; border: 0.5px solid #e0e0e0; }
+    .metric-label { font-size: 12px; color: #888; margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
+    .metric-value { font-size: 24px; font-weight: 500; color: #1a1a1a; margin-bottom: 4px; }
+    .metric-sub { font-size: 12px; color: #888; }
+    .chart-section { background: #fff; border-radius: 10px; border: 0.5px solid #e0e0e0; padding: 1.25rem; }
+    .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: #888; margin-bottom: 12px; }
+    .legend span { display: flex; align-items: center; gap: 5px; }
+    .legend-dot { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
+    .chart-wrap { position: relative; width: 100%; height: 280px; }
+    #loading-msg { text-align: center; padding: 3rem; font-size: 14px; color: #888; }
+    @media (max-width: 600px) {
+      body { padding: 1rem; }
+      .metric-value { font-size: 20px; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="top-bar">
+    <div>
+      <h1 id="dash-title">Laddar...</h1>
+      <p class="subtitle">Email revenue · Voyado/email · uppdateras dagligen</p>
+    </div>
+    <div class="market-btns">
+      <button class="mkt-btn active" onclick="switchMarket('TOTAL')">Totalt</button>
+      <button class="mkt-btn" onclick="switchMarket('SE')">SE</button>
+      <button class="mkt-btn" onclick="switchMarket('NO')">NO</button>
+      <button class="mkt-btn" onclick="switchMarket('FI')">FI</button>
+      <span class="badge" id="pace-badge">...</span>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric-card">
+      <div class="metric-label"><i class="ti ti-calendar"></i> Igår</div>
+      <div class="metric-value" id="val-yesterday">–</div>
+      <div class="metric-sub" id="sub-yesterday">vs föregående år</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label"><i class="ti ti-chart-bar"></i> Hittills denna månad</div>
+      <div class="metric-value" id="val-mtd">–</div>
+      <div class="metric-sub" id="sub-mtd">av månadsmålet</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label"><i class="ti ti-target"></i> Månadsmål</div>
+      <div class="metric-value" id="val-goal">–</div>
+      <div class="metric-sub">föregående år × 1.5</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label"><i class="ti ti-trending-up"></i> Prognos månadsslut</div>
+      <div class="metric-value" id="val-forecast">–</div>
+      <div class="metric-sub" id="sub-forecast">vs mål</div>
+    </div>
+  </div>
+
+  <div class="chart-section">
+    <div class="legend">
+      <span><span class="legend-dot" style="background:#378ADD;"></span>Faktisk 2026</span>
+      <span><span class="legend-dot" style="background:#1D9E75;"></span>Mål (2025 × 1.5)</span>
+      <span><span class="legend-dot" style="background:#378ADD;opacity:0.4;"></span>Prognos</span>
+    </div>
+    <div id="loading-msg">Hämtar data från Google Sheets...</div>
+    <div class="chart-wrap">
+      <canvas id="mainChart" role="img" aria-label="Ackumulerad email-revenue per dag jämfört med mål och prognos"></canvas>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const URLS = {
+  SE: 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://docs.google.com/spreadsheets/d/e/2PACX-1vSs8qyfSCMz7DuNcz5HVdvTIsPkHzPtekmOspccsqvPsRXV27ewmJqMhTRCPn82JKWJBHEJSlnpzcVw/pub?gid=849472739&single=true&output=csv'),
+  NO: 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://docs.google.com/spreadsheets/d/e/2PACX-1vSs8qyfSCMz7DuNcz5HVdvTIsPkHzPtekmOspccsqvPsRXV27ewmJqMhTRCPn82JKWJBHEJSlnpzcVw/pub?gid=543100583&single=true&output=csv'),
+  FI: 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://docs.google.com/spreadsheets/d/e/2PACX-1vSs8qyfSCMz7DuNcz5HVdvTIsPkHzPtekmOspccsqvPsRXV27ewmJqMhTRCPn82JKWJBHEJSlnpzcVw/pub?gid=2088645591&single=true&output=csv'),
+  TOTAL: 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://docs.google.com/spreadsheets/d/e/2PACX-1vSs8qyfSCMz7DuNcz5HVdvTIsPkHzPtekmOspccsqvPsRXV27ewmJqMhTRCPn82JKWJBHEJSlnpzcVw/pub?gid=1668560803&single=true&output=csv')
 };
 
-function doGet(e) {
-  const market = e.parameter.market || 'TOTAL';
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(market);
-  
-  if (!sheet) {
-    return ContentService.createTextOutput('Sheet not found: ' + market)
-      .setMimeType(ContentService.MimeType.TEXT);
-  }
-  
-  const data = sheet.getDataRange().getValues();
-  const csv = data.map(row => row.join(',')).join('\n');
-  
-  return ContentService.createTextOutput(csv)
-    .setMimeType(ContentService.MimeType.TEXT);
+const allData = {};
+let currentMarket = 'TOTAL';
+let chart = null;
+
+const today = new Date();
+const currentMonth = today.getMonth();
+const currentYear = today.getFullYear();
+const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+const dayOfMonth = today.getDate();
+const monthNames = ['Januari','Februari','Mars','April','Maj','Juni','Juli','Augusti','September','Oktober','November','December'];
+
+function fmtK(v) {
+  if (v >= 1000000) return (v/1000000).toFixed(1) + 'M';
+  if (v >= 1000) return Math.round(v/1000) + 'k';
+  return Math.round(v).toString();
 }
 
-function fetchEmailRevenue() {
-  const today = new Date();
-  const startDate2025 = '2025-01-01';
-  const endDate2025 = '2025-12-31';
-  const startDate2026 = '2026-01-01';
-  const endDate2026 = Utilities.formatDate(today, 'UTC', 'yyyy-MM-dd');
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  const allData2025 = {};
-  const allData2026 = {};
-
-  for (const [market, propertyId] of Object.entries(PROPERTIES)) {
-    const sheet = ss.getSheetByName(market);
-    const data2025 = fetchGA4Data(propertyId, startDate2025, endDate2025);
-    const data2026 = fetchGA4Data(propertyId, startDate2026, endDate2026);
-    const merged = mergeData(data2025, data2026);
-    writeToSheet(sheet, merged);
-
-    for (const [date, rev] of Object.entries(data2025)) {
-      allData2025[date] = (allData2025[date] || 0) + rev;
-    }
-    for (const [date, rev] of Object.entries(data2026)) {
-      allData2026[date] = (allData2026[date] || 0) + rev;
-    }
-
-    Logger.log(market + ': ' + merged.length + ' rader skrivna');
-  }
-
-  const totalSheet = ss.getSheetByName('TOTAL');
-  const totalMerged = mergeData(allData2025, allData2026);
-  writeToSheet(totalSheet, totalMerged);
-  Logger.log('TOTAL: ' + totalMerged.length + ' rader skrivna');
+function parseCSV(url) {
+  return new Promise((resolve, reject) => {
+    Papa.parse(url, {
+      download: true,
+      header: true,
+      complete: r => resolve(r.data),
+      error: reject
+    });
+  });
 }
 
-function fetchGA4Data(propertyId, startDate, endDate) {
-  const url = `https://analyticsdata.googleapis.com/v1beta/${propertyId}:runReport`;
+async function loadAll() {
+  try {
+    const results = await Promise.all(
+      Object.entries(URLS).map(async ([key, url]) => {
+        const rows = await parseCSV(url);
+        const byDate = {};
+        rows.forEach(r => {
+          if (!r.date) return;
+          byDate[r.date] = {
+            rev2025: parseFloat(r.revenue_2025) || 0,
+            rev2026: parseFloat(r.revenue_2026) || 0
+          };
+        });
+        return [key, byDate];
+      })
+    );
+    results.forEach(([k, v]) => allData[k] = v);
+    document.getElementById('loading-msg').style.display = 'none';
+    renderMarket('TOTAL');
+  } catch(e) {
+    document.getElementById('loading-msg').textContent = 'Kunde inte hämta data. Kontrollera att Sheetet är publicerat.';
+  }
+}
 
-  const payload = {
-    dateRanges: [{ startDate, endDate }],
-    dimensions: [{ name: 'date' }],
-    metrics: [{ name: 'purchaseRevenue' }],
-    dimensionFilter: {
-      andGroup: {
-        expressions: [
-          {
-            filter: {
-              fieldName: 'sessionSource',
-              stringFilter: { matchType: 'EXACT', value: 'Voyado' }
-            }
-          },
-          {
-            filter: {
-              fieldName: 'sessionMedium',
-              stringFilter: { matchType: 'EXACT', value: 'email' }
-            }
-          }
-        ]
-      }
+function getMonthData(market) {
+  const data = allData[market] || {};
+  const prefix2025 = `2025-${String(currentMonth+1).padStart(2,'0')}`;
+  const prefix2026 = `2026-${String(currentMonth+1).padStart(2,'0')}`;
+
+  let total2025 = 0;
+  let daily2026 = {};
+
+  Object.entries(data).forEach(([date, v]) => {
+    if (date.startsWith(prefix2025)) total2025 += v.rev2025;
+    if (date.startsWith(prefix2026)) {
+      const day = parseInt(date.slice(8,10));
+      daily2026[day] = (daily2026[day] || 0) + v.rev2026;
     }
-  };
-
-  const token = ScriptApp.getOAuthToken();
-  const response = UrlFetchApp.fetch(url, {
-    method: 'post',
-    contentType: 'application/json',
-    headers: { Authorization: `Bearer ${token}` },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
   });
 
-  const json = JSON.parse(response.getContentText());
-  Logger.log('Property: ' + propertyId + ' | Rows: ' + (json.rows ? json.rows.length : 0));
+  return { total2025, daily2026 };
+}
 
-  const result = {};
-  if (json.rows) {
-    for (const row of json.rows) {
-      const rawDate = row.dimensionValues[0].value;
-      const date = `${rawDate.slice(0,4)}-${rawDate.slice(4,6)}-${rawDate.slice(6,8)}`;
-      result[date] = parseFloat(row.metricValues[0].value) || 0;
+function renderMarket(market) {
+  currentMarket = market;
+
+  document.querySelectorAll('.mkt-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent === (market === 'TOTAL' ? 'Totalt' : market));
+  });
+
+  const { total2025, daily2026 } = getMonthData(market);
+  const goal = total2025 * 1.5;
+  const dailyGoal = goal / daysInMonth;
+
+  const labels = [];
+  const actualArr = [];
+  const goalArr = [];
+  const forecastArr = [];
+
+  let cumActual = 0;
+  let cumGoal = 0;
+  let lastActualDay = 0;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    labels.push(d);
+    cumGoal += dailyGoal;
+    goalArr.push(Math.round(cumGoal));
+
+    if (daily2026[d] !== undefined) {
+      cumActual += daily2026[d];
+      actualArr.push(Math.round(cumActual));
+      forecastArr.push(null);
+      lastActualDay = d;
+    } else {
+      actualArr.push(null);
+      if (lastActualDay > 0) {
+        const avgPerDay = cumActual / lastActualDay;
+        forecastArr.push(Math.round(cumActual + avgPerDay * (d - lastActualDay)));
+      } else {
+        forecastArr.push(null);
+      }
     }
   }
 
-  return result;
+  const mtd = cumActual;
+  const forecastEnd = forecastArr[daysInMonth - 1] || mtd;
+  const yesterday2026 = daily2026[dayOfMonth - 1] || 0;
+
+  const data = allData[market] || {};
+  const key2025 = `2025-${String(currentMonth+1).padStart(2,'0')}-${String(dayOfMonth-1).padStart(2,'0')}`;
+  const yesterday2025 = (data[key2025] || {}).rev2025 || 0;
+
+  document.getElementById('dash-title').textContent = monthNames[currentMonth] + ' ' + currentYear + (market !== 'TOTAL' ? ' · ' + market : ' · Alla marknader');
+  document.getElementById('val-yesterday').textContent = fmtK(yesterday2026) + ' kr';
+  const yoyPct = yesterday2025 > 0 ? Math.round(((yesterday2026 - yesterday2025) / yesterday2025) * 100) : 0;
+  document.getElementById('sub-yesterday').textContent = (yoyPct >= 0 ? '+' : '') + yoyPct + '% vs 2025';
+  document.getElementById('val-mtd').textContent = fmtK(mtd) + ' kr';
+  const mtdPct = goal > 0 ? Math.round((mtd / goal) * 100) : 0;
+  document.getElementById('sub-mtd').textContent = mtdPct + '% av ' + fmtK(goal) + ' kr';
+  document.getElementById('val-goal').textContent = fmtK(goal) + ' kr';
+  document.getElementById('val-forecast').textContent = fmtK(forecastEnd) + ' kr';
+  const diff = forecastEnd - goal;
+  const diffPct = goal > 0 ? Math.round((diff / goal) * 100) : 0;
+  document.getElementById('sub-forecast').textContent = (diff >= 0 ? '+' : '') + diffPct + '% vs mål';
+
+  const pace = goal > 0 ? mtd / (goal * (dayOfMonth / daysInMonth)) : 0;
+  const badge = document.getElementById('pace-badge');
+  if (pace >= 1.05) { badge.textContent = '↑ Över mål'; badge.className = 'badge badge-success'; }
+  else if (pace >= 0.88) { badge.textContent = '→ I fas'; badge.className = 'badge badge-warning'; }
+  else { badge.textContent = '↓ Under mål'; badge.className = 'badge badge-danger'; }
+
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('mainChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Faktisk 2026', data: actualArr, borderColor: '#378ADD', backgroundColor: 'transparent', borderWidth: 2, pointRadius: 2, tension: 0.3, spanGaps: false },
+        { label: 'Mål', data: goalArr, borderColor: '#1D9E75', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [4,4], pointRadius: 0 },
+        { label: 'Prognos', data: forecastArr, borderColor: '#378ADD', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [3,3], pointRadius: 0, tension: 0.3, spanGaps: false }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + (ctx.raw || 0).toLocaleString('sv-SE') + ' kr' } }
+      },
+      scales: {
+        x: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 11 }, color: '#999', maxTicksLimit: 10 } },
+        y: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 11 }, color: '#999', callback: v => fmtK(v) } }
+      }
+    }
+  });
 }
 
-function mergeData(data2025, data2026) {
-  const allDates = new Set([...Object.keys(data2025), ...Object.keys(data2026)]);
-  const sorted = [...allDates].sort();
+function switchMarket(market) { renderMarket(market); }
 
-  return sorted.map(date => [
-    date,
-    Math.round(data2025[date] || 0),
-    Math.round(data2026[date] || 0)
-  ]);
-}
-
-function writeToSheet(sheet, rows) {
-  sheet.clearContents();
-  sheet.getRange(1, 1, 1, 3).setValues([['date', 'revenue_2025', 'revenue_2026']]);
-  if (rows.length > 0) {
-    sheet.getRange(2, 1, rows.length, 3).setValues(rows);
-  }
-}
+loadAll();
+</script>
+</body>
+</html>
