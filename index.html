@@ -37,7 +37,16 @@
     .legend-dot { width: 10px; height: 3px; border-radius: 2px; display: inline-block; }
     .chart-wrap { position: relative; width: 100%; height: 380px; }
     #loading-msg { text-align: center; padding: 3rem; font-size: 14px; color: #888; }
-    .top-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+    .market-table { background: #fff; border-radius: 10px; border: 0.5px solid #e0e0e0; padding: 1.25rem; margin-top: 1rem; }
+    .market-table h2 { font-size: 14px; font-weight: 500; color: #1a1a1a; margin-bottom: 1rem; }
+    .market-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .market-table th { text-align: left; color: #888; font-weight: 400; padding: 6px 0; border-bottom: 0.5px solid #e0e0e0; }
+    .market-table td { padding: 10px 0; border-bottom: 0.5px solid #f0f0f0; color: #1a1a1a; }
+    .market-table td:not(:first-child) { text-align: right; }
+    .market-table th:not(:first-child) { text-align: right; }
+    .market-table tr:last-child td { border-bottom: none; font-weight: 500; border-top: 0.5px solid #e0e0e0; }
+    .pos { color: #3b6d11; }
+    .neg { color: #a32d2d; }
     @media (max-width: 600px) { body { padding: 1rem; } .metric-value { font-size: 20px; } .controls { align-items: flex-start; } }
   </style>
 </head>
@@ -103,6 +112,21 @@
     </div>
   </div>
 
+  <div class="market-table">
+    <h2 id="table-title">Igår per marknad · veckodagsjusterad jämförelse</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Marknad</th>
+          <th>Igår 2026</th>
+          <th>Samma veckodag 2025</th>
+          <th>Förändring</th>
+        </tr>
+      </thead>
+      <tbody id="market-tbody"></tbody>
+    </table>
+  </div>
+
 </div>
 
 <script>
@@ -125,6 +149,10 @@ function fmtK(v) {
   if (v >= 1000000) return (v/1000000).toFixed(1) + 'M';
   if (v >= 1000) return Math.round(v/1000) + 'k';
   return Math.round(v).toString();
+}
+
+function fmtFull(v) {
+  return Math.round(v).toLocaleString('sv-SE') + ' kr';
 }
 
 function normalizeDate(str) {
@@ -249,6 +277,54 @@ function getMonthData(market, mode) {
   return { total2025_month, daily2025_raw, daily2025_adjusted, daily2026 };
 }
 
+function renderMarketTable() {
+  const markets = ['SE', 'NO', 'FI'];
+  const marketLabels = { SE: 'Sverige', NO: 'Norge', FI: 'Finland' };
+  const tbody = document.getElementById('market-tbody');
+  tbody.innerHTML = '';
+
+  let totalYesterday2026 = 0;
+  let totalYesterday2025adj = 0;
+
+  markets.forEach(market => {
+    const { daily2025_raw, daily2025_adjusted, daily2026 } = getMonthData(market, currentMode);
+
+    const yesterday2026 = daily2026[dayOfMonth - 1] || 0;
+    const yesterday2025adj = daily2025_adjusted[dayOfMonth - 1] !== undefined
+      ? daily2025_adjusted[dayOfMonth - 1]
+      : (daily2025_raw[dayOfMonth - 1] || 0);
+
+    totalYesterday2026 += yesterday2026;
+    totalYesterday2025adj += yesterday2025adj;
+
+    const pct = yesterday2025adj > 0 ? Math.round(((yesterday2026 - yesterday2025adj) / yesterday2025adj) * 100) : 0;
+    const pctClass = pct >= 0 ? 'pos' : 'neg';
+    const pctStr = (pct >= 0 ? '+' : '') + pct + '%';
+
+    tbody.innerHTML += `
+      <tr>
+        <td>${marketLabels[market]}</td>
+        <td>${fmtFull(yesterday2026)}</td>
+        <td>${fmtFull(yesterday2025adj)}</td>
+        <td class="${pctClass}">${pctStr}</td>
+      </tr>
+    `;
+  });
+
+  const totalPct = totalYesterday2025adj > 0 ? Math.round(((totalYesterday2026 - totalYesterday2025adj) / totalYesterday2025adj) * 100) : 0;
+  const totalPctClass = totalPct >= 0 ? 'pos' : 'neg';
+  const totalPctStr = (totalPct >= 0 ? '+' : '') + totalPct + '%';
+
+  tbody.innerHTML += `
+    <tr>
+      <td>Totalt</td>
+      <td>${fmtFull(totalYesterday2026)}</td>
+      <td>${fmtFull(totalYesterday2025adj)}</td>
+      <td class="${totalPctClass}">${totalPctStr}</td>
+    </tr>
+  `;
+}
+
 function renderMarket(market) {
   currentMarket = market;
 
@@ -361,6 +437,8 @@ function renderMarket(market) {
       }
     }
   });
+
+  renderMarketTable();
 }
 
 function switchMarket(market) { renderMarket(market); }
