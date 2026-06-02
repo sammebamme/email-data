@@ -372,14 +372,18 @@ function renderMarket(market) {
     if (date.startsWith('2025-')) data2025all[date] = v.rev2025;
   });
 
-  const prefix2025 = '2025-' + String(currentMonth + 1).padStart(2, '0');
-  let total2025_month = 0;
-  Object.entries(data).forEach(([date, v]) => {
-    if (date.startsWith(prefix2025)) total2025_month += v.rev2025;
-  });
+  const periodMonth = parseInt(from.slice(5, 7));
+const periodYear = parseInt(from.slice(0, 4));
+const prefix2025 = '2025-' + String(periodMonth).padStart(2, '0');
+const periodDaysInMonth = new Date(periodYear, periodMonth, 0).getDate();
+let total2025_month = 0;
+Object.entries(data).forEach(([date, v]) => {
+  if (date.startsWith(prefix2025)) total2025_month += v.rev2025;
+});
+const effectiveDaysInMonth = periodDaysInMonth;
 
   const goal = total2025_month * 1.5;
-  const dailyGoal = goal / daysInMonth;
+  const dailyGoal = goal / effectiveDaysInMonth;
 
   const dateRange = [];
   const cur = new Date(dateFromStr(from));
