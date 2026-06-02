@@ -135,7 +135,7 @@
   </div>
 
   <div class="market-table">
-    <h2 id="table-title">Igår per marknad · veckodagsjusterad jämförelse</h2>
+    <h2>Igår per marknad · veckodagsjusterad jämförelse</h2>
     <table>
       <thead>
         <tr>
@@ -152,7 +152,7 @@
 </div>
 
 <script>
-const PROXY = 'https://script.google.com/macros/s/AKfycbyX__8dYDEQ-qrAXOzstufnilGj_8KbeOnV5ZdKH7zcZbd1BOGw0uU5FCv7wCy71OZc/exec';
+const PROXY = 'https://script.google.com/macros/s/AKfycbwv5Xd0LFa_jljwSS9HB8AfmcSV5HNbhCEckm6-byas4rydE4216QGgW81ef4VBREh0/exec';
 const EUR_TO_SEK = 11.5;
 
 const allData = {};
@@ -206,20 +206,11 @@ function normalizeDate(str) {
 function getPeriodDates() {
   const todayStr = strFromDate(today);
   const monthStart = currentYear + '-' + String(currentMonth + 1).padStart(2, '0') + '-01';
-
-  if (currentPeriod === 'month') {
-    return { from: monthStart, to: todayStr };
-  } else if (currentPeriod === 'last30') {
-    const d = new Date(today); d.setDate(d.getDate() - 30);
-    return { from: strFromDate(d), to: todayStr };
-  } else if (currentPeriod === 'last90') {
-    const d = new Date(today); d.setDate(d.getDate() - 90);
-    return { from: strFromDate(d), to: todayStr };
-  } else if (currentPeriod === 'year') {
-    return { from: currentYear + '-01-01', to: todayStr };
-  } else if (currentPeriod === 'custom' && filterFrom && filterTo) {
-    return { from: filterFrom, to: filterTo };
-  }
+  if (currentPeriod === 'month') return { from: monthStart, to: todayStr };
+  if (currentPeriod === 'last30') { const d = new Date(today); d.setDate(d.getDate() - 30); return { from: strFromDate(d), to: todayStr }; }
+  if (currentPeriod === 'last90') { const d = new Date(today); d.setDate(d.getDate() - 90); return { from: strFromDate(d), to: todayStr }; }
+  if (currentPeriod === 'year') return { from: currentYear + '-01-01', to: todayStr };
+  if (currentPeriod === 'custom' && filterFrom && filterTo) return { from: filterFrom, to: filterTo };
   return { from: monthStart, to: todayStr };
 }
 
@@ -268,8 +259,9 @@ async function loadAll() {
       sheets.map(async name => {
         const rows = await parseCSV(name);
         const byDate = {};
-        const isFI = name.startsWith('FI');
-        const factor = isFI ? EUR_TO_SEK : 1;
+        const isTotal = name === 'TOTAL' || name === 'TOTAL_camp' || name === 'TOTAL_trans';
+        const isFI = name === 'FI' || name === 'FI_camp' || name === 'FI_trans';
+        const factor = (!isTotal && isFI) ? EUR_TO_SEK : 1;
         rows.forEach(r => {
           const date = normalizeDate(r.date);
           if (!date) return;
@@ -287,41 +279,6 @@ async function loadAll() {
   } catch(e) {
     document.getElementById('loading-msg').textContent = 'Kunde inte hämta data: ' + e.message;
   }
-}
-
-function getPeriodData(market, mode) {
-  const key = getSheetName(market, mode);
-  const data = allData[key] || {};
-  const { from, to } = getPeriodDates();
-
-  const data2025 = {};
-  Object.entries(data).forEach(([date, v]) => {
-    if (date.startsWith('2025-')) data2025[date] = v.rev2025;
-  });
-
-  const dailyActual = {};
-  const dailyPrev = {};
-  const dailyGoalBase = {};
-  let total2025_month = 0;
-
-  const prefix2025 = '2025-' + String(currentMonth + 1).padStart(2, '0');
-  Object.entries(data).forEach(([date, v]) => {
-    if (date.startsWith(prefix2025)) total2025_month += v.rev2025;
-  });
-
-  Object.entries(data).forEach(([date, v]) => {
-    if (date >= from.slice(0,4) + '-01-01' && date <= to && date.startsWith('2026-')) {
-      if (date >= from && date <= to) {
-        const d = dateFromStr(date);
-        const label = date;
-        dailyActual[label] = (dailyActual[label] || 0) + v.rev2026;
-        const adj = findSameWeekdayLastYear(date, data2025);
-        dailyPrev[label] = adj !== null ? adj : (data2025[date.replace('2026','2025')] || 0);
-      }
-    }
-  });
-
-  return { dailyActual, dailyPrev, total2025_month };
 }
 
 function getMonthData(market, mode) {
@@ -434,7 +391,6 @@ function renderMarket(market) {
 
   const labels = [], actualArr = [], prevYearArr = [], goalArr = [], forecastArr = [];
   let cumActual = 0, cumPrev = 0, lastActualIdx = -1;
-
   const isCurrentMonth = currentPeriod === 'month';
 
   dateRange.forEach((date, i) => {
@@ -443,13 +399,11 @@ function renderMarket(market) {
 
     const actual = (data[date] || {}).rev2026 || 0;
     const adj = findSameWeekdayLastYear(date, data2025all);
-    const prev = adj !== null ? adj : ((data2025all[date.replace('2026','2025')] || 0));
+    const prev = adj !== null ? adj : (data2025all[date.replace('2026', '2025')] || 0);
 
     cumPrev += prev;
     prevYearArr.push(Math.round(cumPrev));
-
-    const cumGoalVal = dailyGoal * dayNum;
-goalArr.push(Math.round(cumGoalVal));
+    goalArr.push(Math.round(dailyGoal * dayNum));
 
     if (actual > 0 || date <= strFromDate(today)) {
       cumActual += actual;
@@ -507,7 +461,7 @@ goalArr.push(Math.round(cumGoalVal));
       datasets: [
         { label: 'Faktisk 2026', data: actualArr, borderColor: '#378ADD', backgroundColor: 'transparent', borderWidth: 2.5, pointRadius: dateRange.length > 60 ? 0 : 3, pointHoverRadius: 6, tension: 0.3, spanGaps: false },
         { label: '2025 (veckodagsjusterad)', data: prevYearArr, borderColor: '#E24B4A', backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, pointHoverRadius: 5, tension: 0.3 },
-        { label: 'Mål', data: goalArr, borderColor: '#1D9E75', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, pointHoverRadius: 5, spanGaps: false },
+        { label: 'Mål', data: goalArr, borderColor: '#1D9E75', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [4, 4], pointRadius: 0, pointHoverRadius: 5 },
         { label: 'Prognos', data: forecastArr, borderColor: '#378ADD', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [3, 3], pointRadius: 0, pointHoverRadius: 5, tension: 0.3, spanGaps: false }
       ]
     },
