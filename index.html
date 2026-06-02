@@ -448,12 +448,8 @@ function renderMarket(market) {
     cumPrev += prev;
     prevYearArr.push(Math.round(cumPrev));
 
-    if (isCurrentMonth) {
-      const cumGoalVal = dailyGoal * dayNum;
-      goalArr.push(Math.round(cumGoalVal));
-    } else {
-      goalArr.push(null);
-    }
+    const cumGoalVal = dailyGoal * dayNum;
+goalArr.push(Math.round(cumGoalVal));
 
     if (actual > 0 || date <= strFromDate(today)) {
       cumActual += actual;
