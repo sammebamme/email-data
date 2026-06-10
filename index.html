@@ -367,6 +367,12 @@ function renderMarket(market) {
   const key = getSheetName(market, currentMode);
   const data = allData[key] || {};
 
+  // Grafen ritas över hela månaden i månadsvyn (faktisk-linjen slutar ändå vid idag).
+  let chartTo = to;
+  if (currentPeriod === 'month') {
+    chartTo = currentYear + '-' + String(currentMonth + 1).padStart(2, '0') + '-' + String(daysInMonth).padStart(2, '0');
+  }
+
   const data2025all = {};
   Object.entries(data).forEach(([date, v]) => {
     if (date.startsWith('2025-')) data2025all[date] = v.rev2025;
@@ -387,7 +393,7 @@ const effectiveDaysInMonth = periodDaysInMonth;
 
   const dateRange = [];
   const cur = new Date(dateFromStr(from));
-  const toDate = dateFromStr(to);
+  const toDate = dateFromStr(chartTo);
   while (cur <= toDate) {
     dateRange.push(strFromDate(cur));
     cur.setDate(cur.getDate() + 1);
@@ -396,6 +402,7 @@ const effectiveDaysInMonth = periodDaysInMonth;
   const labels = [], actualArr = [], prevYearArr = [], goalArr = [], forecastArr = [];
   let cumActual = 0, cumPrev = 0, lastActualIdx = -1;
   const isCurrentMonth = currentPeriod === 'month';
+  const todayStr = strFromDate(today);
 
   dateRange.forEach((date, i) => {
     const dayNum = parseInt(date.slice(8, 10));
@@ -409,12 +416,14 @@ const effectiveDaysInMonth = periodDaysInMonth;
     prevYearArr.push(Math.round(cumPrev));
     goalArr.push(Math.round(dailyGoal * dayNum));
 
-    if (actual > 0 || date <= strFromDate(today)) {
+    if (date <= todayStr) {
+      // Dag t.o.m. idag: rita faktisk linje.
       cumActual += actual;
       actualArr.push(Math.round(cumActual));
       forecastArr.push(null);
       if (actual > 0) lastActualIdx = i;
     } else {
+      // Framtida dag: rita prognos, inte faktisk.
       actualArr.push(null);
       if (lastActualIdx >= 0) {
         const avgPerDay = cumActual / (lastActualIdx + 1);
@@ -424,6 +433,15 @@ const effectiveDaysInMonth = periodDaysInMonth;
       }
     }
   });
+
+  // Koppla ihop prognoslinjen med sista faktiska punkten så den inte hänger löst.
+  let lastActualPos = -1;
+  for (let i = actualArr.length - 1; i >= 0; i--) {
+    if (actualArr[i] !== null) { lastActualPos = i; break; }
+  }
+  if (lastActualPos >= 0 && forecastArr[lastActualPos] === null) {
+    forecastArr[lastActualPos] = actualArr[lastActualPos];
+  }
 
   const periodTotal = cumActual;
   const forecastEnd = forecastArr[forecastArr.length - 1] || periodTotal;
