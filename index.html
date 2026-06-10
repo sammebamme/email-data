@@ -110,12 +110,12 @@
       <div class="metric-sub" id="sub-mtd">av månadsmålet</div>
     </div>
     <div class="metric-card">
-      <div class="metric-label"><i class="ti ti-target"></i> Månadsmål</div>
+      <div class="metric-label" id="lbl-goal"><i class="ti ti-target"></i> Månadsmål</div>
       <div class="metric-value" id="val-goal">–</div>
       <div class="metric-sub">föregående år × 1.5</div>
     </div>
     <div class="metric-card">
-      <div class="metric-label"><i class="ti ti-trending-up"></i> Prognos månadsslut</div>
+      <div class="metric-label" id="lbl-forecast"><i class="ti ti-trending-up"></i> Prognos månadsslut</div>
       <div class="metric-value" id="val-forecast">–</div>
       <div class="metric-sub" id="sub-forecast">vs mål</div>
     </div>
@@ -456,17 +456,38 @@ const effectiveDaysInMonth = periodDaysInMonth;
   document.getElementById('dash-title').textContent =
     (market !== 'TOTAL' ? market : 'Alla marknader') + ' · ' + modeLabels[currentMode];
 
-  document.getElementById('val-yesterday').textContent = fmtK(yesterday2026) + ' kr';
+  document.getElementById('val-yesterday').textContent = fmtK(yesterday2026);
   const yoyPct = yesterday2025adj > 0 ? Math.round(((yesterday2026 - yesterday2025adj) / yesterday2025adj) * 100) : 0;
   document.getElementById('sub-yesterday').textContent = (yoyPct >= 0 ? '+' : '') + yoyPct + '% vs samma veckodag 2025';
-  document.getElementById('val-mtd').textContent = fmtK(periodTotal) + ' kr';
-  const mtdPct = goal > 0 ? Math.round((periodTotal / goal) * 100) : 0;
-  document.getElementById('sub-mtd').textContent = isCurrentMonth ? mtdPct + '% av ' + fmtK(goal) + ' kr' : from + ' → ' + to;
-  document.getElementById('val-goal').textContent = isCurrentMonth ? fmtK(goal) + ' kr' : '–';
-  document.getElementById('val-forecast').textContent = isCurrentMonth ? fmtK(forecastEnd) + ' kr' : '–';
-  const diff = forecastEnd - goal;
-  const diffPct = goal > 0 ? Math.round((diff / goal) * 100) : 0;
-  document.getElementById('sub-forecast').textContent = isCurrentMonth ? (diff >= 0 ? '+' : '') + diffPct + '% vs mål' : '';
+  document.getElementById('val-mtd').textContent = fmtK(periodTotal);
+
+  const lblGoal = document.getElementById('lbl-goal');
+  const lblForecast = document.getElementById('lbl-forecast');
+
+  if (isCurrentMonth) {
+    // Månadsvy: mål + prognos som tidigare
+    lblGoal.innerHTML = '<i class="ti ti-target"></i> Månadsmål';
+    lblForecast.innerHTML = '<i class="ti ti-trending-up"></i> Prognos månadsslut';
+
+    const mtdPct = goal > 0 ? Math.round((periodTotal / goal) * 100) : 0;
+    document.getElementById('sub-mtd').textContent = mtdPct + '% av ' + fmtK(goal);
+    document.getElementById('val-goal').textContent = fmtK(goal);
+    document.getElementById('val-forecast').textContent = fmtK(forecastEnd);
+    const diff = forecastEnd - goal;
+    const diffPct = goal > 0 ? Math.round((diff / goal) * 100) : 0;
+    document.getElementById('sub-forecast').textContent = (diff >= 0 ? '+' : '') + diffPct + '% vs mål';
+  } else {
+    // Vald period: visa periodens egna siffror (mål + föregående år)
+    const periodGoal = cumPrev * 1.5;
+    lblGoal.innerHTML = '<i class="ti ti-target"></i> Mål';
+    lblForecast.innerHTML = '<i class="ti ti-calendar"></i> Föregående år';
+
+    const periodPct = periodGoal > 0 ? Math.round((periodTotal / periodGoal) * 100) : 0;
+    document.getElementById('sub-mtd').textContent = periodPct + '% av ' + fmtK(periodGoal);
+    document.getElementById('val-goal').textContent = fmtK(periodGoal);
+    document.getElementById('val-forecast').textContent = fmtK(cumPrev);
+    document.getElementById('sub-forecast').textContent = from + ' → ' + to;
+  }
 
   const pace = isCurrentMonth && goal > 0 ? periodTotal / (goal * (dayOfMonth / daysInMonth)) : 0;
   const badge = document.getElementById('pace-badge');
