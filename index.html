@@ -416,14 +416,14 @@ const effectiveDaysInMonth = periodDaysInMonth;
     prevYearArr.push(Math.round(cumPrev));
     goalArr.push(Math.round(dailyGoal * dayNum));
 
-    if (date <= todayStr) {
-      // Dag t.o.m. idag: rita faktisk linje.
+    if (date < todayStr) {
+      // T.o.m. igår: rita faktisk linje (data är inne).
       cumActual += actual;
       actualArr.push(Math.round(cumActual));
       forecastArr.push(null);
       if (actual > 0) lastActualIdx = i;
     } else {
-      // Framtida dag: rita prognos, inte faktisk.
+      // Idag + framtid: data ej inne ännu, ingen faktisk punkt – rita prognos.
       actualArr.push(null);
       if (lastActualIdx >= 0) {
         const avgPerDay = cumActual / (lastActualIdx + 1);
