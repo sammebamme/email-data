@@ -155,6 +155,12 @@
 const PROXY = 'https://script.google.com/macros/s/AKfycbzb6iMHA1kaQSuarZvKRt4FcmfPRvpt_owTemPgBMGYrMIxJC-doYP6pmSvkX-e5G4/exec';
 const EUR_TO_SEK = 11.5;
 
+const SHEETS = [
+  'SE', 'NO', 'FI', 'TOTAL',
+  'SE_camp', 'NO_camp', 'FI_camp', 'TOTAL_camp',
+  'SE_trans', 'NO_trans', 'FI_trans', 'TOTAL_trans'
+];
+
 const allData = {};
 let currentMarket = 'TOTAL';
 let currentMode = 'all';
@@ -191,8 +197,9 @@ function dateFromStr(str) {
 
 function normalizeDate(str) {
   if (!str) return null;
-  str = str.trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  str = String(str).trim();
+  // ISO-timestamp från Apps Script JSON (t.ex. "2025-01-01T23:00:00.000Z") eller ren "YYYY-MM-DD"
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.slice(0, 10);
   const parts = str.match(/(\w+)\s+(\w+)\s+(\d+)\s+(\d+)/);
   if (parts) {
     const months = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
@@ -237,43 +244,88 @@ function getSheetName(market, mode) {
   if (mode === 'transactional') return market + '_trans';
 }
 
-function parseCSV(sheetName) {
+// Bygger byDate-objektet från rader (objekt med date/revenue_2025/revenue_2026) för ett sheet.
+function buildByDate(sheetName, rows) {
+  const byDate = {};
+  const isTotal = sheetName === 'TOTAL' || sheetName === 'TOTAL_camp' || sheetName === 'TOTAL_trans';
+  const isFI = sheetName === 'FI' || sheetName === 'FI_camp' || sheetName === 'FI_trans';
+  const factor = (!isTotal && isFI) ? EUR_TO_SEK : 1;
+  rows.forEach(r => {
+    const date = normalizeDate(r.date);
+    if (!date) return;
+    byDate[date] = {
+      rev2025: (parseFloat(r.revenue_2025) || 0) * factor,
+      rev2026: (parseFloat(r.revenue_2026) || 0) * factor
+    };
+  });
+  return byDate;
+}
+
+// Konverterar array-of-arrays (från Apps Script getValues/getDisplayValues) till objektrader via headerraden.
+function rowsFromArrays(arr) {
+  if (!Array.isArray(arr) || arr.length < 2) return [];
+  const headers = arr[0].map(h => String(h).trim());
+  return arr.slice(1).map(row => {
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = row[i]);
+    return obj;
+  });
+}
+
+// CSV-hämtning för ett enskilt sheet, med retry (intermittenta 404 på script.googleusercontent.com/echo).
+function parseCSV(sheetName, attempt = 1) {
   return new Promise((resolve, reject) => {
-    Papa.parse(PROXY + '?market=' + sheetName, {
+    Papa.parse(PROXY + '?market=' + encodeURIComponent(sheetName) + '&cb=' + Date.now() + '_' + attempt, {
       download: true,
       header: true,
       complete: r => resolve(r.data),
-      error: reject
+      error: err => {
+        if (attempt < 3) {
+          setTimeout(() => parseCSV(sheetName, attempt + 1).then(resolve, reject), 600 * attempt);
+        } else {
+          reject(err);
+        }
+      }
     });
   });
 }
 
+// Fallback: hämta alla sheets i småbatcher istället för 12 parallella anrop.
+async function loadViaCSVBatches(batchSize = 3) {
+  for (let i = 0; i < SHEETS.length; i += batchSize) {
+    const batch = SHEETS.slice(i, i + batchSize);
+    const results = await Promise.all(batch.map(async name => {
+      const rows = await parseCSV(name);
+      return [name, buildByDate(name, rows)];
+    }));
+    results.forEach(([k, v]) => allData[k] = v);
+  }
+}
+
+// Primär väg: ett enda anrop som returnerar alla sheets som JSON (kräver ?market=ALL-stöd i Apps Script).
+async function loadViaSingleRequest() {
+  const res = await fetch(PROXY + '?market=ALL&cb=' + Date.now());
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const json = await res.json();
+  let loaded = 0;
+  SHEETS.forEach(name => {
+    if (json[name]) {
+      const rows = Array.isArray(json[name][0]) ? rowsFromArrays(json[name]) : json[name];
+      allData[name] = buildByDate(name, rows);
+      loaded++;
+    }
+  });
+  if (loaded === 0) throw new Error('ALL-svaret innehöll inga sheets');
+}
+
 async function loadAll() {
   try {
-    const sheets = [
-      'SE', 'NO', 'FI', 'TOTAL',
-      'SE_camp', 'NO_camp', 'FI_camp', 'TOTAL_camp',
-      'SE_trans', 'NO_trans', 'FI_trans', 'TOTAL_trans'
-    ];
-    const results = await Promise.all(
-      sheets.map(async name => {
-        const rows = await parseCSV(name);
-        const byDate = {};
-        const isTotal = name === 'TOTAL' || name === 'TOTAL_camp' || name === 'TOTAL_trans';
-        const isFI = name === 'FI' || name === 'FI_camp' || name === 'FI_trans';
-        const factor = (!isTotal && isFI) ? EUR_TO_SEK : 1;
-        rows.forEach(r => {
-          const date = normalizeDate(r.date);
-          if (!date) return;
-          byDate[date] = {
-            rev2025: (parseFloat(r.revenue_2025) || 0) * factor,
-            rev2026: (parseFloat(r.revenue_2026) || 0) * factor
-          };
-        });
-        return [name, byDate];
-      })
-    );
-    results.forEach(([k, v]) => allData[k] = v);
+    try {
+      await loadViaSingleRequest();
+    } catch (e) {
+      // Proxyn saknar ALL-stöd eller svaret var ogiltigt – fall tillbaka på CSV per sheet med retry + batching.
+      await loadViaCSVBatches();
+    }
     document.getElementById('loading-msg').style.display = 'none';
     renderMarket('TOTAL');
   } catch(e) {
